@@ -223,7 +223,7 @@ class KeyMacroApp(tk.Tk):
         self._btn_edit    = self._tb_btn(bar, "✎  Edit",    self._cmd_edit_sequence, _C["border"])
         self._btn_clean   = self._tb_btn(bar, "🧹  Strip Delays", self._cmd_strip_delays, _C["border"])
         self._btn_delete  = self._tb_btn(bar, "🗑  Delete",  self._cmd_delete,  _C["border"])
-        self._btn_launch  = self._tb_btn(bar, "🚀  App Launcher", self._cmd_open_launcher, _C["panel"])
+        self._btn_launch  = self._tb_btn(bar, "🔌  App Plugins & Hub", self._cmd_open_launcher, _C["panel"])
 
         # Mouse-path toggle (right-aligned)
         self._mouse_path_var = tk.BooleanVar(value=True)
@@ -385,6 +385,13 @@ class KeyMacroApp(tk.Tk):
             font=("Segoe UI", 9), anchor="w", padx=12,
         )
         self._lbl_status.pack(side="left", fill="y")
+
+        self._lbl_active_app = tk.Label(
+            bar, text="Active App: System Focus",
+            bg=_C["border"], fg=_C["text_dim"],
+            font=("Segoe UI", 9, "italic"), anchor="w", padx=16,
+        )
+        self._lbl_active_app.pack(side="left", fill="y")
 
         self._lbl_store = tk.Label(
             bar, text=f"Storage: {self._store.macros_dir}",
@@ -773,9 +780,18 @@ class KeyMacroApp(tk.Tk):
     # ──────────────────────────────────────────
 
     def _poll_state(self) -> None:
-        """Periodically sync GUI state with background thread state."""
+        """Periodically sync GUI state with background thread state and active window context."""
         if self._state == _State.REPLAYING and not self._engine.is_running:
             self._set_state(_State.IDLE)
+
+        # Update active app context indicator
+        from keymacro.hotkey.context import get_active_window_info
+        exe_name, _ = get_active_window_info()
+        if exe_name:
+            self._lbl_active_app.config(text=f"🎯 Active App: {exe_name}", fg=_C["text_bright"])
+        else:
+            self._lbl_active_app.config(text="Active App: Global Focus", fg=_C["text_dim"])
+
         self.after(self._POLL_MS, self._poll_state)
 
     # ──────────────────────────────────────────

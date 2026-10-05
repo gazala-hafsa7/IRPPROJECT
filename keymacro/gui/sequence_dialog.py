@@ -150,10 +150,17 @@ class SequenceEditorDialog(tk.Toplevel):
         # Target App
         tk.Label(fields_row, text="Target App:", bg=_C["panel"], fg=_C["text"], font=_FONT_UI).pack(side="left")
         self._target_app_var = tk.StringVar(value=self._macro.target_app if self._macro else "")
-        e_app = tk.Entry(
-            fields_row, textvariable=self._target_app_var, width=16,
-            bg=_C["bg"], fg=_C["text_bright"], font=_FONT_MONO,
-            relief="flat", bd=3, insertbackground=_C["text"],
+        
+        # Populate app options from connected App Plugins
+        app_options = ["", "notepad.exe", "chrome.exe", "spotify.exe", "code.exe", "calc.exe"]
+        if self._plugin_mgr:
+            for ap in self._plugin_mgr.list_app_plugins():
+                if ap.target_app and ap.target_app not in app_options:
+                    app_options.append(ap.target_app)
+
+        e_app = ttk.Combobox(
+            fields_row, textvariable=self._target_app_var, values=app_options, width=14,
+            font=_FONT_MONO,
         )
         e_app.pack(side="left", padx=(6, 12))
         e_app.bind("<Return>", lambda _: self._cmd_save())
@@ -179,7 +186,7 @@ class SequenceEditorDialog(tk.Toplevel):
         self._helper_btn(helper_bar, "+ Type Text", self._insert_text)
         self._helper_btn(helper_bar, "+ Click", self._insert_click)
         self._helper_btn(helper_bar, "+ Launch App", self._insert_launch)
-        self._helper_btn(helper_bar, "+ Plugin Action", self._insert_plugin)
+        self._helper_btn(helper_bar, "+ App Plugin / Action", self._insert_plugin)
         self._helper_btn(helper_bar, "+ Wait", self._insert_wait)
 
         # Delays cleanup buttons (right-aligned)

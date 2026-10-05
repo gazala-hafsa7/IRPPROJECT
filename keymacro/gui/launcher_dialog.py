@@ -227,141 +227,418 @@ class AppLauncherDialog(tk.Toplevel):
         top_bar.pack(fill="x")
 
         tk.Label(
-            top_bar, text="Installed App Plugins", bg=_C["panel"], fg=_C["text_bright"], font=_FONT_H1
+            top_bar, text="🔌 Connected App Plugins & Hub", bg=_C["panel"], fg=_C["text_bright"], font=_FONT_H1
         ).pack(side="left")
 
-        # Action buttons
+        # Top Action buttons
         tk.Button(
-            top_bar, text="⚡ Test Selected Action", command=self._cmd_test_plugin_action,
+            top_bar, text="➕ Connect App as Plugin", command=self._cmd_connect_new_app,
             bg=_C["accent"], fg="white", font=_FONT_BOLD,
             relief="flat", padx=10, pady=4, cursor="hand2",
-        ).pack(side="left", padx=16)
+        ).pack(side="left", padx=12)
+
+        tk.Button(
+            top_bar, text="🗑 Disconnect App", command=self._cmd_disconnect_app,
+            bg=_C["panel"], fg=_C["warning"], font=_FONT_UI,
+            relief="flat", padx=8, pady=4, cursor="hand2",
+            highlightbackground=_C["border"], highlightthickness=1,
+        ).pack(side="left", padx=4)
 
         tk.Button(
             top_bar, text="📂 Open Plugins Folder", command=self._cmd_open_plugins_folder,
             bg=_C["panel"], fg=_C["text_bright"], font=_FONT_UI,
-            relief="flat", padx=10, pady=4, cursor="hand2",
+            relief="flat", padx=8, pady=4, cursor="hand2",
             highlightbackground=_C["border"], highlightthickness=1,
         ).pack(side="left", padx=4)
 
         tk.Button(
             top_bar, text="🔄 Reload Plugins", command=self._cmd_reload_plugins,
             bg=_C["panel"], fg=_C["text_bright"], font=_FONT_UI,
-            relief="flat", padx=10, pady=4, cursor="hand2",
+            relief="flat", padx=8, pady=4, cursor="hand2",
             highlightbackground=_C["border"], highlightthickness=1,
         ).pack(side="left", padx=4)
 
-        tk.Button(
-            top_bar, text="📖 Plugin Guide", command=self._cmd_view_guide,
-            bg=_C["panel"], fg=_C["text_dim"], font=("Segoe UI", 9),
-            relief="flat", padx=8, pady=4, cursor="hand2",
-        ).pack(side="right")
-
-        # Main horizontal split: Left (Plugins list), Right (Actions & Details)
+        # Main horizontal split: Left (App Plugins & Builtin Plugins list), Right (App Details & App Macros)
         pane = tk.PanedWindow(parent, orient="horizontal", bg=_C["bg"], sashwidth=4, sashrelief="flat")
-        pane.pack(fill="both", expand=True, padx=16, pady=10)
+        pane.pack(fill="both", expand=True, padx=16, pady=6)
 
-        # Left list: Plugins
+        # Left list: Plugins & Connected Apps
         left_f = tk.Frame(pane, bg=_C["panel"])
-        pane.add(left_f, minsize=240, width=280)
+        pane.add(left_f, minsize=260, width=300)
 
         tk.Label(
-            left_f, text="Loaded Plugins", bg=_C["panel"], fg=_C["text_dim"],
-            font=("Segoe UI", 9, "bold"), padx=10, pady=6, anchor="w",
+            left_f, text="Connected Apps & Plugins", bg=_C["panel"], fg=_C["text_dim"],
+            font=("Segoe UI", 9, "bold"), padx=10, pady=4, anchor="w",
         ).pack(fill="x")
+
+        # Search filter for desktop app plugins
+        p_search_f = tk.Frame(left_f, bg=_C["panel"], padx=8, pady=2)
+        p_search_f.pack(fill="x")
+        self._plugin_search_var = tk.StringVar()
+        self._plugin_search_var.trace_add("write", lambda *_: self._refresh_plugins())
+        e_psearch = tk.Entry(
+            p_search_f, textvariable=self._plugin_search_var,
+            bg=_C["bg"], fg="white", font=_FONT_UI,
+            relief="flat", bd=3, insertbackground="white",
+        )
+        e_psearch.pack(fill="x")
 
         self._plugin_listbox = tk.Listbox(
             left_f, bg=_C["panel"], fg=_C["text_bright"], font=_FONT_UI,
             selectbackground=_C["row_sel"], relief="flat", bd=4,
         )
-        self._plugin_listbox.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+        self._plugin_listbox.pack(fill="both", expand=True, padx=8, pady=(4, 8))
         self._plugin_listbox.bind("<<ListboxSelect>>", self._on_plugin_select)
 
-        # Right frame: Action details
+        # Right frame: Details + App Macros + Actions
         right_f = tk.Frame(pane, bg=_C["panel"])
-        pane.add(right_f, minsize=420)
+        pane.add(right_f, minsize=460)
+
+        hdr_frame = tk.Frame(right_f, bg=_C["panel"], pady=4)
+        hdr_frame.pack(fill="x")
 
         self._lbl_plugin_name = tk.Label(
-            right_f, text="Select a Plugin", bg=_C["panel"], fg=_C["text_bright"],
-            font=_FONT_H1, padx=12, pady=6, anchor="w",
+            hdr_frame, text="Select an App Plugin", bg=_C["panel"], fg=_C["text_bright"],
+            font=_FONT_H1, padx=12, anchor="w",
         )
         self._lbl_plugin_name.pack(fill="x")
 
         self._lbl_plugin_desc = tk.Label(
-            right_f, text="", bg=_C["panel"], fg=_C["text_dim"],
+            hdr_frame, text="", bg=_C["panel"], fg=_C["text_dim"],
             font=("Segoe UI", 9), padx=12, anchor="w",
         )
         self._lbl_plugin_desc.pack(fill="x")
 
-        tk.Frame(right_f, bg=_C["border"], height=1).pack(fill="x", pady=6)
+        tk.Frame(right_f, bg=_C["border"], height=1).pack(fill="x", pady=4)
+
+        # ── Section 1: Macros Configured for this Connected App ─────────────
+        macro_hdr = tk.Frame(right_f, bg=_C["panel"], padx=12, pady=2)
+        macro_hdr.pack(fill="x")
 
         tk.Label(
-            right_f, text="Supported Actions & Macro Syntax:", bg=_C["panel"], fg=_C["text_bright"],
+            macro_hdr, text="App-Specific Macros (Active when this app is in use):",
+            bg=_C["panel"], fg=_C["text_bright"], font=_FONT_BOLD, anchor="w"
+        ).pack(side="left")
+
+        # Action buttons for App Macros
+        tk.Button(
+            macro_hdr, text="➕ Add Macro for App", command=self._cmd_create_macro_for_selected_plugin,
+            bg=_C["accent"], fg="white", font=("Segoe UI", 8, "bold"),
+            relief="flat", padx=8, pady=2, cursor="hand2",
+        ).pack(side="right", padx=2)
+
+        tk.Button(
+            macro_hdr, text="▶ Run Macro", command=self._cmd_run_app_macro,
+            bg=_C["success"], fg="white", font=("Segoe UI", 8, "bold"),
+            relief="flat", padx=8, pady=2, cursor="hand2",
+        ).pack(side="right", padx=2)
+
+        tk.Button(
+            macro_hdr, text="✎ Edit Macro", command=self._cmd_edit_app_macro,
+            bg=_C["panel"], fg=_C["text_bright"], font=("Segoe UI", 8),
+            relief="flat", padx=6, pady=2, cursor="hand2",
+            highlightbackground=_C["border"], highlightthickness=1,
+        ).pack(side="right", padx=2)
+
+        m_cols = ("name", "hotkey", "steps", "risk")
+        self._app_macros_tree = ttk.Treeview(
+            right_f, columns=m_cols, show="headings",
+            style="Macro.Treeview", selectmode="browse", height=5,
+        )
+        self._app_macros_tree.heading("name",   text="Macro Name", anchor="w")
+        self._app_macros_tree.heading("hotkey", text="Hotkey",     anchor="w")
+        self._app_macros_tree.heading("steps",  text="Steps",      anchor="center")
+        self._app_macros_tree.heading("risk",   text="Risk",       anchor="center")
+
+        self._app_macros_tree.column("name",   width=180, anchor="w")
+        self._app_macros_tree.column("hotkey", width=110, anchor="w")
+        self._app_macros_tree.column("steps",  width=50,  anchor="center")
+        self._app_macros_tree.column("risk",   width=60,  anchor="center")
+
+        m_vsb = ttk.Scrollbar(right_f, orient="vertical", command=self._app_macros_tree.yview,
+                              style="Dark.Vertical.TScrollbar")
+        self._app_macros_tree.configure(yscrollcommand=m_vsb.set)
+        m_vsb.pack(side="right", fill="y", padx=(0, 8))
+        self._app_macros_tree.pack(fill="x", padx=(8, 0), pady=(0, 6))
+
+        tk.Frame(right_f, bg=_C["border"], height=1).pack(fill="x", pady=4)
+
+        # ── Section 2: Built-in Actions & Launchers ─────────────────────────
+        tk.Label(
+            right_f, text="Built-in Plugin Actions & Launchers:", bg=_C["panel"], fg=_C["text_bright"],
             font=_FONT_BOLD, padx=12, anchor="w",
         ).pack(fill="x")
+
+        act_hdr = tk.Frame(right_f, bg=_C["panel"], padx=12, pady=2)
+        act_hdr.pack(fill="x")
+
+        tk.Button(
+            act_hdr, text="⚡ Test Plugin Action", command=self._cmd_test_plugin_action,
+            bg=_C["panel"], fg=_C["text_bright"], font=("Segoe UI", 8),
+            relief="flat", padx=8, pady=2, cursor="hand2",
+            highlightbackground=_C["border"], highlightthickness=1,
+        ).pack(side="left")
 
         p_cols = ("action", "desc", "syntax")
         self._actions_tree = ttk.Treeview(
             right_f, columns=p_cols, show="headings",
-            style="Macro.Treeview", selectmode="browse",
+            style="Macro.Treeview", selectmode="browse", height=4,
         )
         self._actions_tree.heading("action", text="Action ID",   anchor="w")
         self._actions_tree.heading("desc",   text="Description", anchor="w")
         self._actions_tree.heading("syntax", text="Example Sequence Syntax", anchor="w")
 
-        self._actions_tree.column("action", width=120, anchor="w")
-        self._actions_tree.column("desc",   width=220, anchor="w")
-        self._actions_tree.column("syntax", width=260, anchor="w")
+        self._actions_tree.column("action", width=110, anchor="w")
+        self._actions_tree.column("desc",   width=180, anchor="w")
+        self._actions_tree.column("syntax", width=220, anchor="w")
 
         act_vsb = ttk.Scrollbar(right_f, orient="vertical", command=self._actions_tree.yview,
                                 style="Dark.Vertical.TScrollbar")
         self._actions_tree.configure(yscrollcommand=act_vsb.set)
-        act_vsb.pack(side="right", fill="y", padx=(0, 8), pady=(0, 8))
-        self._actions_tree.pack(fill="both", expand=True, padx=(8, 0), pady=(0, 8))
+        act_vsb.pack(side="right", fill="y", padx=(0, 8))
+        self._actions_tree.pack(fill="both", expand=True, padx=(8, 0), pady=(0, 6))
+
+        # ── Live Active Window Monitor Footer ─────────────────────────────────
+        self._lbl_context_status = tk.Label(
+            parent, text="Active App Context: Detecting...", bg=_C["bg"], fg=_C["accent"],
+            font=("Segoe UI", 9, "italic"), padx=16, pady=4, anchor="w"
+        )
+        self._lbl_context_status.pack(fill="x", side="bottom")
+
+        # Start live window context monitoring
+        self._poll_active_window()
+
+    def _poll_active_window(self) -> None:
+        """Periodically update active window info to show context awareness."""
+        from keymacro.hotkey.context import get_active_window_info
+        exe_name, title = get_active_window_info()
+        if exe_name:
+            t_short = (title[:35] + "…") if len(title) > 35 else title
+            self._lbl_context_status.config(
+                text=f"🟢 Active App Context: '{exe_name}' ({t_short or 'active window'}) — macros matching '{exe_name}' fire on focus!",
+                fg=_C["success"],
+            )
+        else:
+            self._lbl_context_status.config(
+                text="⚪ Active App Context: Global System Focus",
+                fg=_C["text_dim"],
+            )
+        if self.winfo_exists():
+            self.after(1200, self._poll_active_window)
 
     def _refresh_plugins(self) -> None:
         self._plugin_listbox.delete(0, "end")
-        plugins = self._plugin_mgr.list_plugins()
-        for p in plugins:
-            self._plugin_listbox.insert("end", f"⚡ {p.name} [{p.plugin_id}]")
-        if plugins:
+        all_plugins = self._plugin_mgr.list_plugins()
+        q = getattr(self, "_plugin_search_var", None)
+        query = q.get().strip().lower() if q else ""
+
+        from keymacro.plugins.base import AppPlugin
+        self._filtered_plugins = []
+        for p in all_plugins:
+            if query:
+                match_name = query in p.name.lower()
+                match_id = query in p.plugin_id.lower()
+                match_target = any(query in t.lower() for t in p.target_apps) if p.target_apps else False
+                if not (match_name or match_id or match_target):
+                    continue
+            self._filtered_plugins.append(p)
+            if isinstance(p, AppPlugin):
+                self._plugin_listbox.insert("end", f"📱 {p.name} [{p.target_app}]")
+            else:
+                self._plugin_listbox.insert("end", f"⚡ Plugin: {p.name} [{p.plugin_id}]")
+
+        if self._filtered_plugins:
             self._plugin_listbox.selection_set(0)
-            self._show_plugin_details(plugins[0])
+            self._show_plugin_details(self._filtered_plugins[0])
 
     def _on_plugin_select(self, _event=None) -> None:
         sel = self._plugin_listbox.curselection()
         if not sel:
             return
-        plugins = self._plugin_mgr.list_plugins()
-        if 0 <= sel[0] < len(plugins):
-            self._show_plugin_details(plugins[sel[0]])
+        filtered = getattr(self, "_filtered_plugins", self._plugin_mgr.list_plugins())
+        if 0 <= sel[0] < len(filtered):
+            self._show_plugin_details(filtered[sel[0]])
 
     def _show_plugin_details(self, plugin: Any) -> None:
-        self._lbl_plugin_name.config(text=f"Plugin: {plugin.name} (id: {plugin.plugin_id})")
-        target_str = f" | Targets: {', '.join(plugin.target_apps)}" if plugin.target_apps else ""
+        from keymacro.plugins.base import AppPlugin
+        if isinstance(plugin, AppPlugin):
+            self._lbl_plugin_name.config(text=f"Connected App: {plugin.name} ({plugin.target_app})")
+        else:
+            self._lbl_plugin_name.config(text=f"Plugin: {plugin.name} (id: {plugin.plugin_id})")
+
+        target_str = f" | Target App: {', '.join(plugin.target_apps)}" if plugin.target_apps else ""
         self._lbl_plugin_desc.config(text=f"{plugin.description}{target_str}")
 
+        # Populate App-Specific Macros
+        self._app_macros_tree.delete(*self._app_macros_tree.get_children())
+        store = getattr(self._parent, "_store", None)
+        if store and plugin.target_apps:
+            all_macros = store.list_all()
+            from keymacro.hotkey.context import matches_app
+            target = plugin.target_apps[0]
+            app_macros = [
+                m for m in all_macros
+                if m.target_app and matches_app(target, m.target_app, m.target_app)
+            ]
+            for m in app_macros:
+                self._app_macros_tree.insert(
+                    "", "end", iid=m.macro_id,
+                    values=(m.name, m.hotkey or "—", m.action_count, m.risk_level.value.upper())
+                )
+
+        # Populate Plugin Actions
         self._actions_tree.delete(*self._actions_tree.get_children())
         for action_id, spec in plugin.get_actions().items():
             example = spec.example or f"plugin: {plugin.plugin_id}.{action_id}"
             self._actions_tree.insert("", "end", iid=action_id, values=(action_id, spec.description, example))
 
+    def _get_selected_plugin(self) -> Any | None:
+        sel = self._plugin_listbox.curselection()
+        if not sel:
+            return None
+        filtered = getattr(self, "_filtered_plugins", self._plugin_mgr.list_plugins())
+        if 0 <= sel[0] < len(filtered):
+            return filtered[sel[0]]
+        return None
+
+    def _cmd_connect_new_app(self) -> None:
+        """Show dialog to pick an installed application or enter custom app to connect as an App Plugin."""
+        apps = self._scanner.scan()
+        win = tk.Toplevel(self)
+        win.title("Connect Application as Plugin")
+        win.configure(bg=_C["bg"])
+        win.geometry("540x480")
+        win.grab_set()
+
+        tk.Label(
+            win, text="Connect Application Profile",
+            bg=_C["bg"], fg=_C["text_bright"], font=_FONT_H1, padx=16, pady=10, anchor="w",
+        ).pack(fill="x")
+
+        tk.Label(
+            win, text="Select an installed app or enter its executable name to create an App Plugin profile:",
+            bg=_C["bg"], fg=_C["text_dim"], font=("Segoe UI", 9), padx=16, anchor="w",
+        ).pack(fill="x")
+
+        tk.Frame(win, bg=_C["border"], height=1).pack(fill="x", pady=8)
+
+        # Form fields
+        form = tk.Frame(win, bg=_C["bg"], padx=16)
+        form.pack(fill="x")
+
+        tk.Label(form, text="App Name:", bg=_C["bg"], fg=_C["text_bright"], font=_FONT_UI).grid(row=0, column=0, sticky="w", pady=4)
+        var_name = tk.StringVar(value="")
+        e_name = tk.Entry(form, textvariable=var_name, width=32, bg=_C["panel"], fg="white", font=_FONT_UI, relief="flat", bd=3)
+        e_name.grid(row=0, column=1, sticky="w", padx=8, pady=4)
+
+        tk.Label(form, text="Executable / Target:", bg=_C["bg"], fg=_C["text_bright"], font=_FONT_UI).grid(row=1, column=0, sticky="w", pady=4)
+        var_target = tk.StringVar(value="")
+        e_target = tk.Entry(form, textvariable=var_target, width=32, bg=_C["panel"], fg="white", font=_FONT_MONO, relief="flat", bd=3)
+        e_target.grid(row=1, column=1, sticky="w", padx=8, pady=4)
+
+        tk.Label(
+            win, text="Quick Select Installed Application:",
+            bg=_C["bg"], fg=_C["text_dim"], font=("Segoe UI", 9, "bold"), padx=16, pady=(10, 4), anchor="w",
+        ).pack(fill="x")
+
+        listbox = tk.Listbox(
+            win, bg=_C["panel"], fg=_C["text_bright"], font=_FONT_UI,
+            selectbackground=_C["row_sel"], relief="flat", bd=4,
+        )
+        listbox.pack(fill="both", expand=True, padx=16, pady=4)
+        for app in apps:
+            listbox.insert("end", f"{app.name} ({app.target})")
+
+        def _on_app_select(_e=None):
+            sel = listbox.curselection()
+            if sel:
+                app = apps[sel[0]]
+                var_name.set(app.name)
+                # Use target or executable name
+                target_exe = os.path.basename(app.target) if app.target.lower().endswith(".exe") else app.target
+                var_target.set(target_exe)
+
+        listbox.bind("<<ListboxSelect>>", _on_app_select)
+
+        def _save_connection():
+            name = var_name.get().strip()
+            target = var_target.get().strip()
+            if not name or not target:
+                messagebox.showwarning("Missing Info", "Please enter both Application Name and Executable Target.", parent=win)
+                return
+            self._plugin_mgr.connect_app(name=name, target_app=target)
+            win.destroy()
+            self._refresh_plugins()
+            messagebox.showinfo("Connected", f"Connected application profile '{name}' ({target}) successfully!", parent=self)
+
+        btn_row = tk.Frame(win, bg=_C["bg"], pady=10, padx=16)
+        btn_row.pack(fill="x")
+
+        tk.Button(btn_row, text="Cancel", command=win.destroy, bg=_C["border"], fg=_C["text"], font=_FONT_UI, relief="flat", padx=12, pady=4).pack(side="right", padx=4)
+        tk.Button(btn_row, text="🔗 Connect App", command=_save_connection, bg=_C["accent"], fg="white", font=_FONT_BOLD, relief="flat", padx=14, pady=4).pack(side="right", padx=4)
+
+    def _cmd_disconnect_app(self) -> None:
+        plugin = self._get_selected_plugin()
+        if not plugin:
+            messagebox.showinfo("No Selection", "Please select an App Plugin to disconnect.", parent=self)
+            return
+        from keymacro.plugins.base import AppPlugin
+        if not isinstance(plugin, AppPlugin):
+            messagebox.showwarning("Built-in Plugin", f"'{plugin.name}' is a core python plugin and cannot be disconnected.", parent=self)
+            return
+        if messagebox.askyesno("Disconnect App Plugin", f"Disconnect '{plugin.name}' profile?", parent=self):
+            self._plugin_mgr.disconnect_app(plugin.plugin_id)
+            self._refresh_plugins()
+
+    def _cmd_create_macro_for_selected_plugin(self) -> None:
+        plugin = self._get_selected_plugin()
+        if not plugin or not plugin.target_apps:
+            messagebox.showinfo("Select App", "Please select a connected App Plugin first.", parent=self)
+            return
+        target_app = plugin.target_apps[0]
+        initial_seq = f"# target_app: {target_app}\n# Add your sequence of actions for {plugin.name} below:\n"
+        self.destroy()
+        if hasattr(self._parent, "_cmd_new_sequence_macro"):
+            self._parent._cmd_new_sequence_macro(initial_sequence=initial_seq)
+
+    def _cmd_run_app_macro(self) -> None:
+        sel = self._app_macros_tree.selection()
+        if not sel:
+            messagebox.showinfo("Select Macro", "Please select an app macro to run.", parent=self)
+            return
+        macro_id = sel[0]
+        store = getattr(self._parent, "_store", None)
+        if store and store.exists(macro_id):
+            macro = store.load(macro_id)
+            self._parent._selected = macro
+            self._parent._cmd_run()
+
+    def _cmd_edit_app_macro(self) -> None:
+        sel = self._app_macros_tree.selection()
+        if not sel:
+            messagebox.showinfo("Select Macro", "Please select an app macro to edit.", parent=self)
+            return
+        macro_id = sel[0]
+        store = getattr(self._parent, "_store", None)
+        if store and store.exists(macro_id):
+            macro = store.load(macro_id)
+            self._parent._selected = macro
+            self._parent._cmd_edit_sequence()
+
     def _cmd_test_plugin_action(self) -> None:
-        sel_plugin = self._plugin_listbox.curselection()
+        plugin = self._get_selected_plugin()
         sel_action = self._actions_tree.selection()
-        if not sel_plugin or not sel_action:
+        if not plugin or not sel_action:
             messagebox.showinfo("Select Action", "Please select a plugin and an action to test.", parent=self)
             return
 
-        plugin = self._plugin_mgr.list_plugins()[sel_plugin[0]]
         action_id = sel_action[0]
         spec = plugin.get_actions().get(action_id)
 
-        # If the action has parameters, collect them from the user first
         if spec and spec.params_schema:
             params = self._collect_params(plugin, spec)
             if params is None:
-                return  # user cancelled
+                return
         else:
             params = {}
 
@@ -372,10 +649,6 @@ class AppLauncherDialog(tk.Toplevel):
             messagebox.showerror("Action Test Failed", f"Execution error:\n\n{exc}", parent=self)
 
     def _collect_params(self, plugin: Any, spec: Any) -> dict | None:
-        """Show a small dialog to collect parameter values for a plugin action.
-
-        Returns a dict of {param_name: value} strings, or None if the user cancelled.
-        """
         win = tk.Toplevel(self)
         win.title(f"Parameters — {plugin.name} › {spec.name}")
         win.configure(bg=_C["bg"])
@@ -395,7 +668,6 @@ class AppLauncherDialog(tk.Toplevel):
 
         tk.Frame(win, bg=_C["border"], height=1).pack(fill="x", pady=8)
 
-        # Build one entry per parameter
         entries: dict[str, tk.StringVar] = {}
         first_entry = None
         for param_name, param_help in spec.params_schema.items():
@@ -448,7 +720,6 @@ class AppLauncherDialog(tk.Toplevel):
         win.bind("<Return>", lambda _: _run())
         win.bind("<Escape>", lambda _: _cancel())
 
-        # Centre over self
         win.update_idletasks()
         px = self.winfo_x() + self.winfo_width() // 2
         py = self.winfo_y() + self.winfo_height() // 2
@@ -477,3 +748,4 @@ class AppLauncherDialog(tk.Toplevel):
             os.startfile(str(guide_path))
         else:
             messagebox.showinfo("Plugin Guide", "See PLUGINS_GUIDE.md in the project root directory.", parent=self)
+
