@@ -123,11 +123,12 @@ class PluginManager:
     def _load_builtins(self) -> None:
         """Instantiate and register built-in plugins."""
         from keymacro.plugins.builtin.browser import BrowserPlugin
+        from keymacro.plugins.builtin.custom import CustomPlugin
         from keymacro.plugins.builtin.media import MediaPlugin
         from keymacro.plugins.builtin.notepad import NotepadPlugin
         from keymacro.plugins.builtin.system import SystemPlugin
 
-        for cls in (BrowserPlugin, SystemPlugin, MediaPlugin, NotepadPlugin):
+        for cls in (BrowserPlugin, CustomPlugin, SystemPlugin, MediaPlugin, NotepadPlugin):
             try:
                 inst = cls()
                 self.register(inst)

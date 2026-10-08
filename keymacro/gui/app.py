@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING
 
 from keymacro.models.action import Macro, RiskLevel
 from keymacro.safety.safety_layer import BlockedPathError
+from keymacro.gui.widget_helpers import attach_context_menu
 
 if TYPE_CHECKING:
     from keymacro.engine.replay import ReplayEngine
@@ -890,33 +891,41 @@ class _EditDialog(tk.Toplevel):
         # Name
         tk.Label(self, text="Name:", bg=_C["bg"], fg=_C["text"], font=_FONT_UI).pack(**pad, anchor="w")
         self._name_var = tk.StringVar(value=macro.name)
-        tk.Entry(self, textvariable=self._name_var, width=42,
+        e1 = tk.Entry(self, textvariable=self._name_var, width=42,
                  bg=_C["panel"], fg=_C["text_bright"], insertbackground=_C["text"],
-                 font=_FONT_UI, relief="flat", bd=4).pack(**pad)
+                 font=_FONT_UI, relief="flat", bd=4)
+        e1.pack(**pad)
+        attach_context_menu(e1)
 
         # Hotkey
         tk.Label(self, text="Hotkey (pynput format, e.g. <ctrl>+<shift>+f5):",
                  bg=_C["bg"], fg=_C["text"], font=_FONT_UI).pack(**pad, anchor="w")
         self._hotkey_var = tk.StringVar(value=macro.hotkey)
-        tk.Entry(self, textvariable=self._hotkey_var, width=42,
+        e2 = tk.Entry(self, textvariable=self._hotkey_var, width=42,
                  bg=_C["panel"], fg=_C["text_bright"], insertbackground=_C["text"],
-                 font=_FONT_MONO, relief="flat", bd=4).pack(**pad)
+                 font=_FONT_MONO, relief="flat", bd=4)
+        e2.pack(**pad)
+        attach_context_menu(e2)
 
         # Target App
         tk.Label(self, text="Target App (e.g. chrome.exe, spotify, notepad, or blank for Global):",
                  bg=_C["bg"], fg=_C["text"], font=_FONT_UI).pack(**pad, anchor="w")
         self._target_app_var = tk.StringVar(value=macro.target_app)
-        tk.Entry(self, textvariable=self._target_app_var, width=42,
+        e3 = tk.Entry(self, textvariable=self._target_app_var, width=42,
                  bg=_C["panel"], fg=_C["text_bright"], insertbackground=_C["text"],
-                 font=_FONT_MONO, relief="flat", bd=4).pack(**pad)
+                 font=_FONT_MONO, relief="flat", bd=4)
+        e3.pack(**pad)
+        attach_context_menu(e3)
 
         # Description
         tk.Label(self, text="Description (optional):",
                  bg=_C["bg"], fg=_C["text"], font=_FONT_UI).pack(**pad, anchor="w")
         self._desc_var = tk.StringVar(value=macro.description)
-        tk.Entry(self, textvariable=self._desc_var, width=42,
+        e4 = tk.Entry(self, textvariable=self._desc_var, width=42,
                  bg=_C["panel"], fg=_C["text_bright"], insertbackground=_C["text"],
-                 font=_FONT_UI, relief="flat", bd=4).pack(**pad)
+                 font=_FONT_UI, relief="flat", bd=4)
+        e4.pack(**pad)
+        attach_context_menu(e4)
 
         # Buttons
         tk.Frame(self, bg=_C["border"], height=1).pack(fill="x", pady=(12, 0))

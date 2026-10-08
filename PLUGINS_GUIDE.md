@@ -184,9 +184,21 @@ Once a plugin is saved in `%APPDATA%\KeyMacro\plugins\`:
 1. Open KeyMacro.
 2. In the **Macro Sequence Editor**, simply write:
    ```
-   launch: spotify.exe
-   wait: 1s
+   launch: excel.exe
+   wait: 1.5s
+   plugin: custom.open_and_type target="C:\Work\Timesheet.xlsx" text="Log-in: {time}" delay=1.5s suffix=enter
    plugin: media.play_pause
    plugin: system.volume_up steps=4
    ```
-3. Or in the **🚀 App Launcher & Plugin Hub**, navigate to the **Plugins** tab to preview all available plugins, click **Test Action**, or insert them directly into any macro.
+3. Or in the **🚀 App Launcher & Plugin Hub**, navigate to the **Plugins** tab to preview all available plugins, click **✨ + Custom Action** to visually build and test your own tasks (e.g. open spreadsheet & write current time in a log-in column), or insert them directly into any macro.
+
+---
+
+## 5. Custom Plug-in Action Builder (`custom` Plugin)
+
+KeyMacro includes a built-in `custom` plugin for user automation tasks:
+
+- **Open File/Sheet & Type (`plugin: custom.open_and_type`)**: Opens a spreadsheet file or web URL, waits for focus, and types text/timestamps (e.g. `{time}`, `{date}`, `{timestamp}`) into log columns.
+- **Type Timestamp (`plugin: custom.type_timestamp`)**: Types current time directly into active cells/fields.
+- **Append File Log (`plugin: custom.append_log`)**: Appends timestamped log lines directly to log files.
+- **GUI Builder (`✨ + Custom Task`)**: Click **✨ + Custom Action** in the Plugin Hub or Sequence Builder to build, test, and save custom actions with live timestamp previews and 1-click test execution.

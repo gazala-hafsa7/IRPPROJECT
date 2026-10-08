@@ -20,6 +20,13 @@ from keymacro.models.sequence import (
     serialize_sequence,
     strip_delays,
 )
+from keymacro.gui.widget_helpers import (
+    attach_context_menu,
+    create_paste_button,
+    get_clipboard_text,
+    is_url,
+    sanitize_url,
+)
 
 if TYPE_CHECKING:
     from keymacro.launcher.app_scanner import AppScanner
@@ -134,6 +141,7 @@ class SequenceEditorDialog(tk.Toplevel):
             relief="flat", bd=3, insertbackground=_C["text"],
         )
         e_name.pack(side="left", padx=(6, 16))
+        attach_context_menu(e_name)
         e_name.bind("<Return>", lambda _: self._cmd_save())
 
         # Hotkey
@@ -145,6 +153,7 @@ class SequenceEditorDialog(tk.Toplevel):
             relief="flat", bd=3, insertbackground=_C["text"],
         )
         e_hk.pack(side="left", padx=(6, 12))
+        attach_context_menu(e_hk)
         e_hk.bind("<Return>", lambda _: self._cmd_save())
 
         # Target App
@@ -168,11 +177,13 @@ class SequenceEditorDialog(tk.Toplevel):
         # Description
         tk.Label(fields_row, text="Description:", bg=_C["panel"], fg=_C["text"], font=_FONT_UI).pack(side="left")
         self._desc_var = tk.StringVar(value=self._macro.description if self._macro else "")
-        tk.Entry(
+        e_desc = tk.Entry(
             fields_row, textvariable=self._desc_var,
             bg=_C["bg"], fg=_C["text_bright"], font=_FONT_UI,
             relief="flat", bd=3, insertbackground=_C["text"],
-        ).pack(side="left", fill="x", expand=True, padx=(6, 0))
+        )
+        e_desc.pack(side="left", fill="x", expand=True, padx=(6, 0))
+        attach_context_menu(e_desc)
 
         # ── Quick Insert Helper Toolbar ──────────────────
         helper_bar = tk.Frame(self, bg=_C["border"], padx=12, pady=4)
@@ -187,6 +198,8 @@ class SequenceEditorDialog(tk.Toplevel):
         self._helper_btn(helper_bar, "+ Click", self._insert_click)
         self._helper_btn(helper_bar, "+ Launch App", self._insert_launch)
         self._helper_btn(helper_bar, "+ App Plugin / Action", self._insert_plugin)
+        self._helper_btn(helper_bar, "🌐 + Paste URL", self._insert_paste_url)
+        self._helper_btn(helper_bar, "✨ + Custom Task", self._insert_custom_task)
         self._helper_btn(helper_bar, "+ Wait", self._insert_wait)
 
         # Delays cleanup buttons (right-aligned)
@@ -245,6 +258,7 @@ class SequenceEditorDialog(tk.Toplevel):
             relief="flat", bd=4, wrap="none", undo=True,
         )
         self._txt_seq.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+        attach_context_menu(self._txt_seq)
 
         # Initial text content
         if initial_sequence:
@@ -445,10 +459,23 @@ class SequenceEditorDialog(tk.Toplevel):
         win.resizable(True, True)
 
         # ── Title ──────────────────────────────────────────────────
+        title_bar = tk.Frame(win, bg=_C["bg"], padx=12, pady=6)
+        title_bar.pack(fill="x")
+
         tk.Label(
-            win, text="Choose a Plugin Action:",
-            bg=_C["bg"], fg=_C["text_bright"], font=_FONT_BOLD, padx=12, pady=8, anchor="w",
-        ).pack(fill="x")
+            title_bar, text="Choose a Plugin Action:",
+            bg=_C["bg"], fg=_C["text_bright"], font=_FONT_BOLD, anchor="w",
+        ).pack(side="left")
+
+        def _open_builder_and_close():
+            win.destroy()
+            self._insert_custom_task()
+
+        tk.Button(
+            title_bar, text="✨ + Create Custom Action",
+            command=_open_builder_and_close,
+            bg="#27ae60", fg="white", font=("Segoe UI", 9, "bold"), relief="flat", padx=10, pady=2, cursor="hand2",
+        ).pack(side="right")
 
         tk.Frame(win, bg=_C["border"], height=1).pack(fill="x")
 
@@ -543,6 +570,7 @@ class SequenceEditorDialog(tk.Toplevel):
 
             if spec.params_schema:
                 for i, (param_name, param_help) in enumerate(spec.params_schema.items()):
+                    is_url_field = any(k in param_name.lower() for k in ("url", "link", "address", "web"))
                     row = tk.Frame(params_frame, bg=_C["panel"])
                     row.pack(fill="x", pady=3, padx=4)
                     tk.Label(
@@ -550,16 +578,30 @@ class SequenceEditorDialog(tk.Toplevel):
                         bg=_C["panel"], fg=_C["text_bright"], font=_FONT_UI, width=14, anchor="w",
                     ).pack(side="left")
                     var = tk.StringVar()
+
+                    # Pre-fill clipboard content if it looks like a URL for URL parameters
+                    clip_txt = get_clipboard_text(params_frame)
+                    if is_url_field and clip_txt and is_url(clip_txt):
+                        var.set(sanitize_url(clip_txt))
+
                     entry = tk.Entry(
                         row, textvariable=var, width=22,
                         bg=_C["bg"], fg=_C["text_bright"], font=_FONT_MONO,
                         relief="flat", bd=3, insertbackground="white",
                     )
                     entry.pack(side="left", fill="x", expand=True)
+
+                    btn_p = create_paste_button(
+                        row, entry, var, is_url_field=is_url_field,
+                        bg=_C["border"], fg=_C["text_bright"]
+                    )
+                    btn_p.pack(side="left", padx=(4, 2))
+
                     tk.Label(
                         row, text=f"  ({param_help})",
                         bg=_C["panel"], fg=_C["text_dim"], font=("Segoe UI", 8), anchor="w",
                     ).pack(side="left")
+                    attach_context_menu(entry, is_url_field=is_url_field)
                     _state["entries"][param_name] = var
                     if i == 0:
                         entry.focus_set()
@@ -590,8 +632,8 @@ class SequenceEditorDialog(tk.Toplevel):
             for param_name, var in _state["entries"].items():
                 val = var.get().strip()
                 if val:
-                    # Quote values that contain spaces
-                    parts.append(f'{param_name}="{val}"' if " " in val else f"{param_name}={val}")
+                    # Quote values that contain spaces or special characters
+                    parts.append(f'{param_name}="{val}"' if (" " in val or '"' in val) else f"{param_name}={val}")
             line = " ".join(parts)
             self._append_line(line)
             win.destroy()
@@ -608,6 +650,37 @@ class SequenceEditorDialog(tk.Toplevel):
 
         win.bind("<Return>", lambda _: _do_insert())
         win.bind("<Escape>", lambda _: win.destroy())
+
+    def _insert_paste_url(self) -> None:
+        clip = get_clipboard_text(self)
+        if clip and is_url(clip):
+            url = sanitize_url(clip)
+            line = f'plugin: browser.open_url url="{url}"' if " " in url else f"plugin: browser.open_url url={url}"
+            self._append_line(line)
+        else:
+            from tkinter import simpledialog
+            initial = sanitize_url(clip) if clip else "https://"
+            val = simpledialog.askstring(
+                "Paste / Open URL Action",
+                "Enter or paste URL for browser plugin action:",
+                parent=self,
+                initialvalue=initial,
+            )
+            if val:
+                url = sanitize_url(val)
+                line = f'plugin: browser.open_url url="{url}"' if " " in url else f"plugin: browser.open_url url={url}"
+                self._append_line(line)
+
+    def _insert_custom_task(self) -> None:
+        if not self._plugin_mgr:
+            messagebox.showinfo("Plugins", "Plugin manager not available.", parent=self)
+            return
+        from keymacro.gui.custom_action_dialog import CustomActionBuilderDialog
+        CustomActionBuilderDialog(
+            self,
+            self._plugin_mgr,
+            on_created_callback=lambda aid, line_cmd: self._append_line(line_cmd),
+        )
 
     def _insert_wait(self) -> None:
         from tkinter import simpledialog

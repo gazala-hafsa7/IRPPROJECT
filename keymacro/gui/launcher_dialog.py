@@ -17,6 +17,13 @@ from typing import TYPE_CHECKING, Any
 
 from keymacro.launcher.app_scanner import AppScanner, InstalledApp
 from keymacro.plugins.manager import PluginManager
+from keymacro.gui.widget_helpers import (
+    attach_context_menu,
+    create_paste_button,
+    get_clipboard_text,
+    is_url,
+    sanitize_url,
+)
 
 if TYPE_CHECKING:
     pass
@@ -114,6 +121,7 @@ class AppLauncherDialog(tk.Toplevel):
             relief="flat", bd=4, insertbackground="white",
         )
         self._search_entry.pack(side="left", padx=(0, 16))
+        attach_context_menu(self._search_entry)
         self._search_entry.focus_set()
 
         # Action buttons
@@ -235,7 +243,13 @@ class AppLauncherDialog(tk.Toplevel):
             top_bar, text="➕ Connect App as Plugin", command=self._cmd_connect_new_app,
             bg=_C["accent"], fg="white", font=_FONT_BOLD,
             relief="flat", padx=10, pady=4, cursor="hand2",
-        ).pack(side="left", padx=12)
+        ).pack(side="left", padx=6)
+
+        tk.Button(
+            top_bar, text="✨ + Custom Action", command=self._cmd_create_custom_action,
+            bg="#27ae60", fg="white", font=_FONT_BOLD,
+            relief="flat", padx=10, pady=4, cursor="hand2",
+        ).pack(side="left", padx=6)
 
         tk.Button(
             top_bar, text="🗑 Disconnect App", command=self._cmd_disconnect_app,
@@ -501,6 +515,11 @@ class AppLauncherDialog(tk.Toplevel):
             return filtered[sel[0]]
         return None
 
+    def _cmd_create_custom_action(self) -> None:
+        """Show modal dialog to visually create and save custom plugin actions."""
+        from keymacro.gui.custom_action_dialog import CustomActionBuilderDialog
+        CustomActionBuilderDialog(self, self._plugin_mgr, on_created_callback=lambda *_: self._refresh_plugins())
+
     def _cmd_connect_new_app(self) -> None:
         """Show dialog to pick an installed application or enter custom app to connect as an App Plugin."""
         apps = self._scanner.scan()
@@ -671,6 +690,7 @@ class AppLauncherDialog(tk.Toplevel):
         entries: dict[str, tk.StringVar] = {}
         first_entry = None
         for param_name, param_help in spec.params_schema.items():
+            is_url_field = any(k in param_name.lower() for k in ("url", "link", "address", "web"))
             row = tk.Frame(win, bg=_C["bg"])
             row.pack(fill="x", padx=16, pady=4)
             tk.Label(
@@ -678,16 +698,30 @@ class AppLauncherDialog(tk.Toplevel):
                 bg=_C["bg"], fg=_C["text_bright"], font=_FONT_UI, width=14, anchor="w",
             ).pack(side="left")
             var = tk.StringVar()
+
+            # Pre-fill clipboard URL if available
+            clip_txt = get_clipboard_text(win)
+            if is_url_field and clip_txt and is_url(clip_txt):
+                var.set(sanitize_url(clip_txt))
+
             e = tk.Entry(
-                row, textvariable=var, width=30,
+                row, textvariable=var, width=28,
                 bg=_C["panel"], fg=_C["text_bright"], font=_FONT_MONO,
                 relief="flat", bd=3, insertbackground="white",
             )
             e.pack(side="left", fill="x", expand=True)
+
+            btn_p = create_paste_button(
+                row, e, var, is_url_field=is_url_field,
+                bg=_C["border"], fg=_C["text_bright"]
+            )
+            btn_p.pack(side="left", padx=(4, 2))
+
             tk.Label(
                 row, text=f"  ({param_help})",
                 bg=_C["bg"], fg=_C["text_dim"], font=("Segoe UI", 8), anchor="w",
             ).pack(side="left")
+            attach_context_menu(e, is_url_field=is_url_field)
             entries[param_name] = var
             if first_entry is None:
                 first_entry = e
