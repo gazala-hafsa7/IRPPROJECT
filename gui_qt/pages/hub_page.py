@@ -147,6 +147,7 @@ class HubPage(QWidget):
 
             # Action button widget
             action_widget = QWidget()
+            action_widget.setStyleSheet("background: transparent;")
             action_layout = QHBoxLayout(action_widget)
             action_layout.setContentsMargins(4, 2, 4, 2)
             action_layout.setSpacing(6)

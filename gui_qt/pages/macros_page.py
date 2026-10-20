@@ -400,6 +400,12 @@ class MacrosPage(QWidget):
             QMessageBox.No,
         )
         if res == QMessageBox.Yes:
+            # Unregister hotkey before deleting — mirrors old tkinter _cmd_delete behavior
+            if self._selected_macro.hotkey:
+                try:
+                    self._bridge._hotkeys.unregister(self._selected_macro.hotkey)
+                except Exception:
+                    pass
             self._store.delete(self._selected_macro.macro_id)
             self._clear_detail()
             self.refresh()

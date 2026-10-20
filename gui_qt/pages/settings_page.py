@@ -79,13 +79,11 @@ class SettingsPage(QWidget):
 
         # Dark & Purple Radio
         self._radio_dark = QRadioButton("Dark & Purple  (Graphite & Electric Violet)")
-        self._radio_dark.setStyleSheet("font-weight: 600; font-size: 13px;")
         self._radio_dark.toggled.connect(self._on_theme_toggled)
         options_layout.addWidget(self._radio_dark)
 
         # Light & Pastel Radio
         self._radio_light = QRadioButton("Light & Pastel  (Soft Lavender & Blush Accents)")
-        self._radio_light.setStyleSheet("font-weight: 600; font-size: 13px;")
         self._radio_light.toggled.connect(self._on_theme_toggled)
         options_layout.addWidget(self._radio_light)
 

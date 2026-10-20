@@ -31,18 +31,22 @@ from gui_qt.pages.dashboard_page import DashboardPage
 from gui_qt.pages.hub_page import HubPage
 from gui_qt.pages.macros_page import MacrosPage
 from gui_qt.pages.settings_page import SettingsPage
+from gui_qt.pages.workflow_page import WorkflowPage
 from gui_qt.theme.theme_manager import THEME_DARK_PURPLE, THEME_LIGHT_PASTEL, ThemeManager
 from keymacro.hotkey.context import get_active_window_info
 from keymacro.models.action import Macro
+from keymacro.voice.voice_trigger import VoiceTrigger
 
 if TYPE_CHECKING:
     from keymacro.engine.replay import ReplayEngine
+    from keymacro.engine.workflow_runner import WorkflowRunner
     from keymacro.hotkey.listener import HotkeyListener
     from keymacro.launcher.app_scanner import AppScanner
     from keymacro.plugins.manager import PluginManager
     from keymacro.recorder.recorder import Recorder
     from keymacro.safety.safety_layer import SafetyLayer
     from keymacro.storage.macro_store import MacroStore
+    from keymacro.storage.workflow_store import WorkflowStore
 
 
 class KeyMacroMainWindow(QMainWindow):
@@ -57,6 +61,8 @@ class KeyMacroMainWindow(QMainWindow):
         hotkeys: "HotkeyListener",
         plugins: "PluginManager",
         scanner: "AppScanner",
+        workflow_store: "WorkflowStore | None" = None,
+        workflow_runner: "WorkflowRunner | None" = None,
         theme_manager: "ThemeManager | None" = None,
         parent: QWidget | None = None,
     ) -> None:
@@ -69,6 +75,8 @@ class KeyMacroMainWindow(QMainWindow):
         self._hotkeys = hotkeys
         self._plugins = plugins
         self._scanner = scanner
+        self._workflow_store = workflow_store
+        self._workflow_runner = workflow_runner
         self._theme_mgr = theme_manager or ThemeManager()
 
         # Thread bridge
@@ -83,11 +91,14 @@ class KeyMacroMainWindow(QMainWindow):
 
         self._nav_buttons: dict[str, QPushButton] = {}
         self._current_page_key = "dashboard"
+        self._voice_trigger: VoiceTrigger | None = None
 
         self._init_window()
         self._build_ui()
         self._connect_signals()
         self._start_context_timer()
+        self.refresh_workflow_hotkeys()
+        self._init_voice_trigger()
 
         # Navigate to Dashboard initially
         self._navigate_to("dashboard")
@@ -137,6 +148,7 @@ class KeyMacroMainWindow(QMainWindow):
             ("macros",    "📁  Macro Library"),
             ("builder",   "⚡  Sequence Builder"),
             ("hub",       "🔌  App Hub & Plugins"),
+            ("workflows", "🔗  Workflows"),
             ("settings",  "⚙  Settings & Themes"),
         ]
 
@@ -210,15 +222,25 @@ class KeyMacroMainWindow(QMainWindow):
         # Instantiate Pages
         self._page_dashboard = DashboardPage(self._store, self._bridge, self)
         self._page_macros = MacrosPage(self._store, self._bridge, self)
-        self._page_builder = BuilderPage(self._store, self)
+        self._page_builder = BuilderPage(self._store, self._scanner, self._plugins, self)
         self._page_hub = HubPage(self._scanner, self._plugins, self)
         self._page_settings = SettingsPage(self._theme_mgr, self._store, self)
+
+        # Workflow page (optional — requires workflow_store + workflow_runner)
+        if self._workflow_store and self._workflow_runner:
+            self._page_workflows = WorkflowPage(
+                self._workflow_store, self._store, self._workflow_runner, self
+            )
+            self._page_workflows.workflow_changed.connect(self.refresh_workflow_hotkeys)
+        else:
+            self._page_workflows = QWidget()  # placeholder
 
         self._stack.addWidget(self._page_dashboard)   # Index 0
         self._stack.addWidget(self._page_macros)      # Index 1
         self._stack.addWidget(self._page_builder)     # Index 2
         self._stack.addWidget(self._page_hub)         # Index 3
-        self._stack.addWidget(self._page_settings)    # Index 4
+        self._stack.addWidget(self._page_workflows)   # Index 4
+        self._stack.addWidget(self._page_settings)    # Index 5
 
         right_layout.addWidget(self._stack, stretch=1)
         root_layout.addWidget(right_container, stretch=1)
@@ -243,7 +265,8 @@ class KeyMacroMainWindow(QMainWindow):
             "macros":    (1, "Macro Library"),
             "builder":   (2, "Sequence Builder & Editor"),
             "hub":       (3, "App Launcher & Plugin Hub"),
-            "settings":  (4, "Appearance & System Settings"),
+            "workflows": (4, "Macro Workflow Builder"),
+            "settings":  (5, "Appearance & System Settings"),
         }
 
         if page_key not in index_map:
@@ -369,6 +392,114 @@ class KeyMacroMainWindow(QMainWindow):
         else:
             self._lbl_context.setText("🎯 Focus: Global")
 
+    # ── Voice Trigger ─────────────────────────────────────────────────────────
+
+    def _init_voice_trigger(self) -> None:
+        """Start the background voice trigger daemon thread."""
+        # Voice signals must cross thread boundary safely
+        self._voice_macro_signal = _VoiceSignalRelay(self)
+        self._voice_macro_signal.macro_triggered.connect(self._on_voice_macro_triggered)
+        self._voice_macro_signal.workflow_triggered.connect(self.run_workflow)
+        self._voice_macro_signal.status_changed.connect(self._on_voice_status)
+
+        self._voice_trigger = VoiceTrigger(
+            macro_store=self._store,
+            on_match=lambda m: self._voice_macro_signal.macro_triggered.emit(m),
+            on_status=lambda s: self._voice_macro_signal.status_changed.emit(s),
+            workflow_store=self._workflow_store,
+            on_workflow_match=lambda wf: self._voice_macro_signal.workflow_triggered.emit(wf),
+        )
+
+        if self._voice_trigger.is_available:
+            self._voice_trigger.start()
+            self._sb_status.setText("🎙 Voice trigger active — say 'Hey KeyMacro, run <name>'")
+        # If SpeechRecognition not installed, silently skip (no crash)
+
+    def _on_voice_macro_triggered(self, macro: Macro) -> None:
+        """Relay from voice thread → safe Qt main thread macro execution."""
+        if self._bridge.state != "idle":
+            return
+        self._sb_status.setText(f"🎙 Voice: running '{macro.name}'…")
+        QTimer.singleShot(0, lambda: self._bridge.run_macro(macro))
+
+    def run_workflow(self, workflow: "Workflow") -> None:
+        """Execute a workflow node-by-node in the background."""
+        if not self._workflow_runner or not self._workflow_store:
+            return
+        if self._workflow_runner.is_running or self._bridge.state != "idle":
+            self._sb_status.setText(f"⚠️ Cannot run workflow '{workflow.name}' — system busy.")
+            return
+
+        self._sb_status.setText(f"⚡ Running workflow '{workflow.name}'…")
+
+        def _on_node(node_id: str, macro_name: str, status: str) -> None:
+            QTimer.singleShot(0, lambda: self._sb_status.setText(f"⚡ Workflow '{workflow.name}' → '{macro_name}' ({status})"))
+
+        def _on_done(wf_name: str) -> None:
+            QTimer.singleShot(0, lambda: self._sb_status.setText(f"✅ Workflow '{wf_name}' completed successfully."))
+
+        def _on_error(wf_name: str, exc: Exception) -> None:
+            QTimer.singleShot(0, lambda: self._sb_status.setText(f"❌ Workflow '{wf_name}' error: {exc}"))
+
+        self._workflow_runner.run(
+            workflow,
+            self._store,
+            self._engine,
+            on_node=_on_node,
+            on_done=_on_done,
+            on_error=_on_error,
+        )
+
+    def refresh_workflow_hotkeys(self) -> None:
+        """Register global hotkeys for all workflows with assigned shortcuts."""
+        if not self._workflow_store or not self._hotkeys:
+            return
+        workflows = self._workflow_store.list_all()
+        for wf in workflows:
+            if wf.hotkey:
+                def _make_wf_handler(w: "Workflow"):
+                    return lambda: self._voice_macro_signal.workflow_triggered.emit(w)
+                try:
+                    self._hotkeys.register(
+                        wf.hotkey,
+                        _make_wf_handler(wf),
+                        macro_id=f"wf_{wf.workflow_id}",
+                    )
+                except Exception as exc:
+                    print(f"[MainWindow] Workflow hotkey failed for {wf.name}: {exc}")
+
+    def _on_voice_status(self, status: str) -> None:
+        if status.startswith("matched:"):
+            parts = status.split(":", 2)
+            name = parts[1]
+            heard = parts[2] if len(parts) > 2 else ""
+            if heard:
+                self._sb_status.setText(f"🎙 Heard: \"{heard}\" → Running '{name}'…")
+            else:
+                self._sb_status.setText(f"🎙 Matched: '{name}'…")
+        elif status.startswith("matched_workflow:"):
+            parts = status.split(":", 2)
+            name = parts[1]
+            heard = parts[2] if len(parts) > 2 else ""
+            if heard:
+                self._sb_status.setText(f"🎙 Heard: \"{heard}\" → Running workflow '{name}'…")
+            else:
+                self._sb_status.setText(f"🎙 Matched workflow: '{name}'…")
+        elif status.startswith("no_match:"):
+            heard = status.split(":", 1)[1]
+            self._sb_status.setText(f"🎙 Heard: \"{heard}\" (no match)")
+        elif status == "no_macros":
+            self._sb_status.setText("🎙 Voice: No saved macros/workflows in library")
+        elif status == "processing":
+            self._sb_status.setText("🎙 Listening… processing speech")
+        elif status == "listening":
+            if self._bridge.state == "idle" and "Heard:" not in self._sb_status.text():
+                self._sb_status.setText("🎙 Voice trigger active — say 'Hey KeyMacro, run <name>'")
+        elif status.startswith("error:"):
+            self._sb_status.setText(f"🎙 Voice error: {status[6:][:60]}")
+        elif status == "unavailable":
+            pass
+
     # ── Themes ────────────────────────────────────────────────────────────────
 
     def _toggle_theme(self) -> None:
@@ -387,4 +518,17 @@ class KeyMacroMainWindow(QMainWindow):
             self._bridge.stop_recording()
         elif self._bridge.state == "replaying":
             self._bridge.stop_execution()
+        if self._voice_trigger:
+            self._voice_trigger.stop()
         event.accept()
+
+
+# ── Thread-safe signal relay for voice trigger ────────────────────────────────
+
+from PySide6.QtCore import QObject, Signal as _Signal
+
+class _VoiceSignalRelay(QObject):
+    """Thin QObject that lets the voice daemon thread emit Qt signals safely."""
+    macro_triggered    = _Signal(object)   # Macro
+    workflow_triggered = _Signal(object)   # Workflow
+    status_changed     = _Signal(str)
