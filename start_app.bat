@@ -6,9 +6,15 @@ echo ===================================================
 echo           KeyMacro — Desktop Automation
 echo ===================================================
 
-:: 1. Check if .venv already exists
+:: 1. Check if venv or .venv already exists
+if exist "venv\Scripts\python.exe" (
+    echo [Info] Virtual environment detected (venv).
+    echo [Launch] Starting KeyMacro...
+    venv\Scripts\python.exe run_qt.py
+    goto end
+)
 if exist ".venv\Scripts\python.exe" (
-    echo [Info] Virtual environment detected.
+    echo [Info] Virtual environment detected (.venv).
     echo [Launch] Starting KeyMacro...
     .venv\Scripts\python.exe run_qt.py
     goto end

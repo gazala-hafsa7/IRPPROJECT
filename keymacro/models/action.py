@@ -232,13 +232,13 @@ class Macro:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Macro":
         return cls(
-            macro_id    = data.get("macro_id", str(uuid.uuid4())),
-            name        = data["name"],
-            description = data.get("description", ""),
-            hotkey      = data.get("hotkey", ""),
-            target_app  = data.get("target_app", ""),
-            created_at  = data.get("created_at", _now_iso()),
-            modified_at = data.get("modified_at", _now_iso()),
+            macro_id    = data.get("macro_id") or str(uuid.uuid4()),
+            name        = data.get("name") or "Unnamed",
+            description = data.get("description") or "",
+            hotkey      = data.get("hotkey") or "",
+            target_app  = data.get("target_app") or "",
+            created_at  = data.get("created_at") or _now_iso(),
+            modified_at = data.get("modified_at") or _now_iso(),
             actions     = [Action.from_dict(a) for a in data.get("actions", [])],
         )
 

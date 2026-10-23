@@ -122,19 +122,21 @@ class HotkeyListener:
         if not tokens:
             return
 
+        target_app_clean = (target_app or "").strip()
         binding = HotkeyBinding(
             raw_hotkey=hotkey_str,
             keys=tokens,
-            target_app=target_app.strip(),
+            target_app=target_app_clean,
             callback=callback,
             macro_id=macro_id,
         )
 
         with self._lock:
             # Remove any existing duplicate binding for the exact same macro_id or hotkey+app
+            app_lower = target_app_clean.lower()
             self._bindings = [
                 b for b in self._bindings
-                if not (b.raw_hotkey == hotkey_str and b.target_app.lower() == target_app.strip().lower())
+                if not (b.raw_hotkey == hotkey_str and b.target_app.lower() == app_lower)
                 and not (macro_id and b.macro_id == macro_id)
             ]
             self._bindings.append(binding)

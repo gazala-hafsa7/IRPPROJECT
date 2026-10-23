@@ -213,6 +213,21 @@ QPushButton#ThemeToggleBtn:hover {
     border-color: #C084FC;
 }
 
+/* Voice Toggle Pill */
+QPushButton#VoiceToggleBtn {
+    background-color: #23253B;
+    border: 1.5px solid #10B981;
+    border-radius: 16px;
+    padding: 5px 14px;
+    font-weight: 600;
+    color: #34D399;
+}
+
+QPushButton#VoiceToggleBtn:hover {
+    background-color: #172E2B;
+    border-color: #34D399;
+}
+
 /* Text Inputs and Editors */
 QLineEdit, QTextEdit, QPlainTextEdit {
     background-color: #151624;

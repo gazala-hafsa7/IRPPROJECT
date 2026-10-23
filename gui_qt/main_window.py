@@ -205,6 +205,14 @@ class KeyMacroMainWindow(QMainWindow):
         self._lbl_context.setObjectName("HotkeyPill")
         header_layout.addWidget(self._lbl_context)
 
+        # Voice Trigger toggle pill in header
+        self._btn_voice_pill = QPushButton("🎙  Voice: Starting…")
+        self._btn_voice_pill.setObjectName("VoiceToggleBtn")
+        self._btn_voice_pill.setCursor(Qt.PointingHandCursor)
+        self._btn_voice_pill.setToolTip("Click to toggle Speech Recognition & Voice Commands")
+        self._btn_voice_pill.clicked.connect(self._toggle_voice_listener)
+        header_layout.addWidget(self._btn_voice_pill)
+
         header_layout.addStretch()
 
         # Theme toggle button in header
@@ -224,7 +232,8 @@ class KeyMacroMainWindow(QMainWindow):
         self._page_macros = MacrosPage(self._store, self._bridge, self)
         self._page_builder = BuilderPage(self._store, self._scanner, self._plugins, self)
         self._page_hub = HubPage(self._scanner, self._plugins, self)
-        self._page_settings = SettingsPage(self._theme_mgr, self._store, self)
+        self._page_settings = SettingsPage(self._theme_mgr, self._store, parent=self)
+        self._page_settings.voice_toggled.connect(self._on_settings_voice_toggled)
 
         # Workflow page (optional — requires workflow_store + workflow_runner)
         if self._workflow_store and self._workflow_runner:
@@ -396,7 +405,6 @@ class KeyMacroMainWindow(QMainWindow):
 
     def _init_voice_trigger(self) -> None:
         """Start the background voice trigger daemon thread."""
-        # Voice signals must cross thread boundary safely
         self._voice_macro_signal = _VoiceSignalRelay(self)
         self._voice_macro_signal.macro_triggered.connect(self._on_voice_macro_triggered)
         self._voice_macro_signal.workflow_triggered.connect(self.run_workflow)
@@ -410,10 +418,45 @@ class KeyMacroMainWindow(QMainWindow):
             on_workflow_match=lambda wf: self._voice_macro_signal.workflow_triggered.emit(wf),
         )
 
+        self._page_settings.set_voice_trigger(self._voice_trigger)
+
         if self._voice_trigger.is_available:
             self._voice_trigger.start()
+            self._update_voice_pill_state(is_active=True)
             self._sb_status.setText("🎙 Voice trigger active — say 'Hey KeyMacro, run <name>'")
-        # If SpeechRecognition not installed, silently skip (no crash)
+        else:
+            self._update_voice_pill_state(is_active=False, unavailable=True)
+            self._sb_status.setText("⚠️ Speech recognition optional packages not installed.")
+
+    def _toggle_voice_listener(self) -> None:
+        """Toggle voice trigger on/off from the header pill."""
+        if not self._voice_trigger or not self._voice_trigger.is_available:
+            return
+        new_state = not self._voice_trigger.is_enabled
+        self._voice_trigger.is_enabled = new_state
+        self._update_voice_pill_state(is_active=new_state)
+        self._page_settings.sync_voice_ui()
+        if new_state:
+            self._sb_status.setText("🎙 Voice trigger active — say 'Hey KeyMacro, run <name>'")
+        else:
+            self._sb_status.setText("🎙 Voice trigger paused.")
+
+    def _on_settings_voice_toggled(self, enabled: bool) -> None:
+        self._update_voice_pill_state(is_active=enabled)
+
+    def _update_voice_pill_state(self, is_active: bool, unavailable: bool = False) -> None:
+        if unavailable:
+            self._btn_voice_pill.setText("🎙  Voice: Unavailable")
+            self._btn_voice_pill.setEnabled(False)
+            self._btn_voice_pill.setStyleSheet("border-color: #6B7280; color: #9CA3AF;")
+        elif is_active:
+            self._btn_voice_pill.setText("🎙  Voice: Active")
+            self._btn_voice_pill.setEnabled(True)
+            self._btn_voice_pill.setStyleSheet("")
+        else:
+            self._btn_voice_pill.setText("🎙  Voice: Paused")
+            self._btn_voice_pill.setEnabled(True)
+            self._btn_voice_pill.setStyleSheet("border-color: #6B7280; color: #9CA3AF;")
 
     def _on_voice_macro_triggered(self, macro: Macro) -> None:
         """Relay from voice thread → safe Qt main thread macro execution."""
@@ -469,36 +512,48 @@ class KeyMacroMainWindow(QMainWindow):
                     print(f"[MainWindow] Workflow hotkey failed for {wf.name}: {exc}")
 
     def _on_voice_status(self, status: str) -> None:
+        if hasattr(self, "_page_settings") and self._page_settings:
+            self._page_settings.update_voice_status(status)
+
         if status.startswith("matched:"):
             parts = status.split(":", 2)
             name = parts[1]
             heard = parts[2] if len(parts) > 2 else ""
             if heard:
-                self._sb_status.setText(f"🎙 Heard: \"{heard}\" → Running '{name}'…")
+                self._sb_status.setText(f'🎙 Heard: "{heard}" → Running \'{name}\'…')
             else:
                 self._sb_status.setText(f"🎙 Matched: '{name}'…")
+            self._btn_voice_pill.setText("🎙  Voice: Matched")
         elif status.startswith("matched_workflow:"):
             parts = status.split(":", 2)
             name = parts[1]
             heard = parts[2] if len(parts) > 2 else ""
             if heard:
-                self._sb_status.setText(f"🎙 Heard: \"{heard}\" → Running workflow '{name}'…")
+                self._sb_status.setText(f'🎙 Heard: "{heard}" → Running workflow \'{name}\'…')
             else:
                 self._sb_status.setText(f"🎙 Matched workflow: '{name}'…")
+            self._btn_voice_pill.setText("🎙  Voice: Matched")
         elif status.startswith("no_match:"):
             heard = status.split(":", 1)[1]
-            self._sb_status.setText(f"🎙 Heard: \"{heard}\" (no match)")
+            self._sb_status.setText(f'🎙 Heard: "{heard}" (no matching macro)')
+            if self._voice_trigger and self._voice_trigger.is_enabled:
+                self._btn_voice_pill.setText("🎙  Voice: Active")
         elif status == "no_macros":
             self._sb_status.setText("🎙 Voice: No saved macros/workflows in library")
         elif status == "processing":
-            self._sb_status.setText("🎙 Listening… processing speech")
+            self._sb_status.setText("🎙 Hearing speech… processing audio")
+            self._btn_voice_pill.setText("🎙  Listening…")
         elif status == "listening":
             if self._bridge.state == "idle" and "Heard:" not in self._sb_status.text():
                 self._sb_status.setText("🎙 Voice trigger active — say 'Hey KeyMacro, run <name>'")
+            if self._voice_trigger and self._voice_trigger.is_enabled:
+                self._btn_voice_pill.setText("🎙  Voice: Active")
+        elif status == "calibrating":
+            self._sb_status.setText("🎙 Calibrating microphone for ambient noise…")
         elif status.startswith("error:"):
             self._sb_status.setText(f"🎙 Voice error: {status[6:][:60]}")
-        elif status == "unavailable":
-            pass
+        elif status == "stopped":
+            self._btn_voice_pill.setText("🎙  Voice: Paused")
 
     # ── Themes ────────────────────────────────────────────────────────────────
 

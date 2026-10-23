@@ -18,15 +18,30 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# If PySide6 is not in current environment, auto-delegate to .venv
+# Look for virtual environment in either 'venv' or '.venv'
+venv_python = None
+for candidate in [
+    ROOT / "venv" / "Scripts" / "python.exe",
+    ROOT / ".venv" / "Scripts" / "python.exe",
+    ROOT / "venv" / "bin" / "python",
+    ROOT / ".venv" / "bin" / "python",
+]:
+    if candidate.exists():
+        venv_python = candidate
+        break
+
+# Verify dependencies; auto-delegate to virtual environment if missing
 try:
     import PySide6  # noqa: F401
+    import speech_recognition  # noqa: F401
+    import sounddevice  # noqa: F401
 except ModuleNotFoundError:
-    venv_python = ROOT / ".venv" / "Scripts" / "python.exe"
-    if venv_python.exists():
+    if venv_python and Path(sys.executable).resolve() != venv_python.resolve():
         sys.exit(subprocess.call([str(venv_python), str(Path(__file__).resolve())] + sys.argv[1:]))
-    else:
-        print("[KeyMacro] PySide6 not found. Please activate .venv: source .venv/Scripts/activate", file=sys.stderr)
+    try:
+        import PySide6  # noqa: F401
+    except ModuleNotFoundError:
+        print("[KeyMacro] PySide6 not found. Please install requirements: pip install -r requirements.txt", file=sys.stderr)
         sys.exit(1)
 
 from gui_qt.app import KeyMacroQtApp

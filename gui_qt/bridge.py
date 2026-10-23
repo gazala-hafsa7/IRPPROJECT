@@ -199,7 +199,7 @@ class EngineBridge(QObject):
                     self._hotkeys.register(
                         macro.hotkey,
                         _make_handler(macro),
-                        target_app=macro.target_app,
+                        target_app=macro.target_app or "",
                         macro_id=macro.macro_id,
                     )
                 except Exception as exc:
